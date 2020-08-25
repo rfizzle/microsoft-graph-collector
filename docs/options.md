@@ -209,7 +209,7 @@ The destination path to write to in Google Cloud Storage.
 * Environment Variable: `MICROSOFT_GRAPH_COLLECTOR_GCS_PATH`
 * Config file format (depends on type, presented is JSON):
 ```
- "gcs-path": "logs/gsuite/collector.log"
+ "gcs-path": "logs/microsoft/collector.log"
 ```
 
 ##### `gcs-credentials`
@@ -257,7 +257,7 @@ The resource name of the log. This is useful for separating log types in Stackdr
 * Environment Variable: `MICROSOFT_GRAPH_COLLECTOR_STACKDRIVER_LOG_NAME`
 * Config file format (depends on type, presented is JSON):
 ```
- "stackdriver-log-name": "gsuite-activity"
+ "stackdriver-log-name": "microsoft-graph-security"
 ```
 
 ##### `stackdriver-credentials`
@@ -317,7 +317,7 @@ The destination path to write to in AWS S3.
 * Environment Variable: `MICROSOFT_GRAPH_COLLECTOR_S3_PATH`
 * Config file format (depends on type, presented is JSON):
 ```
- "s3-path": "logs/gsuite/collector.log"
+ "s3-path": "logs/microsoft/collector.log"
 ```
 
 #### `s3-access-key-id`
