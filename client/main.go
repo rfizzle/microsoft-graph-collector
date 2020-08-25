@@ -20,6 +20,7 @@ const (
 	rateLimitHttpCode = 429
 )
 
+// NewClient will initialize and return an authorized Graph Client
 func NewClient(tenantId, clientId, clientSecret string) (*GraphClient, error) {
 	// Initialize client
 	graphClient := initClient(tenantId, clientId, clientSecret)
@@ -35,6 +36,7 @@ func NewClient(tenantId, clientId, clientSecret string) (*GraphClient, error) {
 	return graphClient, nil
 }
 
+// initClient will initialize and return a new Graph Client
 func initClient(tenantId, clientId, clientSecret string) *GraphClient {
 	return &GraphClient{
 		TenantId:     tenantId,
@@ -58,8 +60,7 @@ func (graphClient *GraphClient) login() error {
 
 	// Handle errors
 	if err != nil {
-		log.Printf("Error in login request: %v\n", err)
-		return err
+		return errors.New(string(body))
 	}
 
 	// Unmarshal response json
@@ -68,8 +69,7 @@ func (graphClient *GraphClient) login() error {
 
 	// Handle error
 	if err != nil {
-		log.Printf("Error unmarshalling response body: %v\n", err)
-		return err
+		return errors.New(fmt.Sprintf("error on unmarshal response body: %v", err))
 	}
 
 	// Set access token
@@ -78,8 +78,8 @@ func (graphClient *GraphClient) login() error {
 	return nil
 }
 
-// GetAlerts will retreive the events between the two supplied timestamps and send the results to the channel
-func (graphClient *GraphClient) GetAlerts(lastPollTimestamp, currentTimestamp string, resultsChannel chan <- string) (int, error) {
+// GetAlerts will retrieve the events between the two supplied timestamps and send the results to the channel
+func (graphClient *GraphClient) GetAlerts(lastPollTimestamp, currentTimestamp string, resultsChannel chan<- string) (int, error) {
 	// Setup variable
 	count := 0
 
@@ -111,6 +111,11 @@ func (graphClient *GraphClient) GetAlerts(lastPollTimestamp, currentTimestamp st
 
 	// Conduct request
 	body, err := graphClient.conductRequest("GET", "https://graph.microsoft.com/v1.0/security/alerts", params)
+
+	// Handle error
+	if err != nil {
+		return -1, err
+	}
 
 	// Parse Graph Security Alerts
 	var response GraphSecurityAlertsResponse
@@ -165,6 +170,11 @@ func (graphClient *GraphClient) GetAlerts(lastPollTimestamp, currentTimestamp st
 		// Do request
 		body, err = graphClient.conductRequest("GET", "https://graph.microsoft.com/v1.0/security/alerts", params)
 
+		// Handle error
+		if err != nil {
+			return -1, err
+		}
+
 		// Unmarshal json
 		err = json.Unmarshal(body, &response)
 
@@ -212,7 +222,7 @@ func (graphClient *GraphClient) conductRequestRaw(method string, uri string, par
 	aptUrl, err := url.Parse(uri)
 
 	if err != nil {
-		log.Printf("Error during URI parsing: %v", err.Error())
+		log.Debugf("error during URI parsing: %v", err)
 		return nil, err
 	}
 
@@ -247,8 +257,7 @@ func (graphClient *GraphClient) conductRequestRaw(method string, uri string, par
 
 	// Handle errors
 	if err != nil {
-		log.Errorf("error in request: %v", err)
-		return nil, err
+		return body, err
 	}
 
 	return body, nil
@@ -296,6 +305,16 @@ func (graphClient *GraphClient) makeRetryableHttpCall(
 
 		// Return non 200 and non rate limit responses
 		if err != nil || (resp.StatusCode != 200 && resp.StatusCode != rateLimitHttpCode) {
+			// Warn on 206 Partial Content
+			if resp.StatusCode == 206 {
+				log.Warnf("header present - `Warning: %v`", resp.Header.Get("Warning"))
+				log.Warnf("this means that a MS provider returned an error code")
+				log.Warnf("see: https://docs.microsoft.com/en-us/graph/api/resources/security-error-codes?view=graph-rest-1.0")
+			}
+
+			body, err = ioutil.ReadAll(resp.Body)
+			resp.Body.Close()
+
 			if err == nil {
 				return resp, body, errors.New(resp.Status)
 			}

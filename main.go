@@ -55,7 +55,7 @@ func main() {
 	}
 }
 
-func pollEvery(seconds int, resultsChannel chan <- string, tmpWriter *outputs.TmpWriter) {
+func pollEvery(seconds int, resultsChannel chan<- string, tmpWriter *outputs.TmpWriter) {
 	var currentState *state.State
 	var err error
 
@@ -72,10 +72,19 @@ func pollEvery(seconds int, resultsChannel chan <- string, tmpWriter *outputs.Tm
 
 	// Poll every
 	for {
-		log.Println("Getting data...")
+		log.Println("getting microsoft graph security events...")
 
 		// Get events
-		eventCount, lastPollTime := getEvents(currentState.LastPollTimestamp, resultsChannel)
+		eventCount, lastPollTime, err := getEvents(currentState.LastPollTimestamp, resultsChannel)
+
+		// Handle error
+		if err != nil {
+			// Wait for x seconds and retry poll
+			<-time.After(time.Duration(seconds) * time.Second)
+
+			// Retry the request
+			continue
+		}
 
 		// Copy tmp file to correct outputs
 		if eventCount > 0 {
@@ -89,7 +98,7 @@ func pollEvery(seconds int, resultsChannel chan <- string, tmpWriter *outputs.Tm
 
 			// Write to enabled outputs
 			if err := outputs.WriteToOutputs(tmpWriter.LastFilePath, lastPollTime.Format(time.RFC3339)); err != nil {
-				log.Errorf("Unable to write to output: %v", err)
+				log.Errorf("unable to write to output: %v", err)
 			}
 
 			// Remove temp file now
@@ -100,7 +109,7 @@ func pollEvery(seconds int, resultsChannel chan <- string, tmpWriter *outputs.Tm
 		}
 
 		// Let know that event has been processes
-		log.Infof("%v events processed...\n", eventCount)
+		log.Infof("%v events processed", eventCount)
 
 		// Update state
 		currentState.LastPollTimestamp = lastPollTime.Format(time.RFC3339)
@@ -111,7 +120,7 @@ func pollEvery(seconds int, resultsChannel chan <- string, tmpWriter *outputs.Tm
 	}
 }
 
-func getEvents(timestamp string, resultChannel chan<- string) (int, time.Time) {
+func getEvents(timestamp string, resultChannel chan<- string) (int, time.Time, error) {
 	// Get current time
 	now := time.Now()
 
@@ -121,14 +130,20 @@ func getEvents(timestamp string, resultChannel chan<- string) (int, time.Time) {
 	// Handle error
 	if err != nil {
 		log.Errorf("unable to build client: %v", err)
-		os.Exit(1)
+		return 0, now, err
 	}
 
 	// Get alerts
 	dataCount, err := graphClient.GetAlerts(timestamp, now.Format(time.RFC3339), resultChannel)
 
+	// Return error
+	if err != nil {
+		log.Errorf("error getting alerts: %v", err)
+		return 0, now, err
+	}
+
 	// Return count and timestamp
-	return dataCount, now
+	return dataCount, now, nil
 }
 
 // Handle message in a channel
